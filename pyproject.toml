@@ -1,0 +1,17 @@
+[build-system]
+build-backend = 'mesonpy'
+requires = ['meson-python', 'numpy']
+
+[project]
+name = 'astroholic'
+version = '0.0.1'
+description = 'Package LIC plotting (line integral convolution) for cartesian grids.'
+readme = { file = 'README.md', content-type = 'text/markdown' }
+authors = [
+    { name = "Til Birnstiel", email = "til.birnstiel@lmu.de" },
+]
+license = { file = 'LICENSE' }
+dependencies = ['numpy', 'scipy', 'matplotlib', 'tqdm', 'scikit-image', 'Pillow']
+
+[project.urls]
+Repository = "https://github.com/birnstiel/astroholic"
