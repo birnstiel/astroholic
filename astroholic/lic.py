@@ -8,7 +8,7 @@ LIC = _fortran.flic
 gen_noise_fast = _fortran.gen_noise_fast
 
 __all__ = ['LIC', 'gen_noise_fast', 'contrast_enhance', 'calc_2D_streamline',
-           'LIC_twostage', 'mix', 'pcolormesh_rgb', 'check_openmp']
+           'LIC_twostage', 'mix', 'pcolormesh_rgb', 'check_openmp', 'normalize_velocity']
 
 
 def check_openmp():
@@ -228,3 +228,37 @@ def pcolormesh_rgb(x, y, rgb, ax=None, **kwargs):
         1, 0, 2).reshape(-1, col_len) / 255, **kwargs)
     cc.set_array(None)
     return f, ax
+
+
+def normalize_velocity(VX, VY, p=0.5, eps=1e-8, perc=99):
+    """Normalize the velocity field for better visualization in LIC
+
+    Parameters
+    ----------
+    VX : array
+        velocity in x direction
+    VY : array
+        velocity in y direction
+    p : float, optional
+        power for normalization, by default 0.5
+    eps : float, optional
+        small value to avoid division by zero, by default 1e-8
+    perc : float, optional
+        percentile for clipping the velocity, by default 99
+
+    Returns
+    -------
+    VXn, VYn : array
+        normalized velocity in x and y direction
+    """
+
+    speed = (VX**2 + VY**2)
+    sclip = _np.percentile(speed, perc)
+    speed = _np.clip(speed, 0, sclip)
+
+    f_norm = 1 / (speed**p + eps)
+
+    VXn = VX * f_norm
+    VYn = VY * f_norm
+
+    return VXn, VYn

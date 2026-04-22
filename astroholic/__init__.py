@@ -8,6 +8,7 @@ from .lic import LIC_twostage
 from .lic import mix
 from .lic import pcolormesh_rgb
 from .lic import check_openmp
+from .lic import normalize_velocity
 
 __version__ = _md.version('astroholic')
 
@@ -18,5 +19,6 @@ __all__ = [
     'LIC_twostage',
     'mix',
     'pcolormesh_rgb',
-    'check_openmp'
+    'check_openmp',
+    'normalize_velocity',
 ]
