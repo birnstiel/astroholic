@@ -5,8 +5,9 @@ from ._lic import lic
 from .lic import contrast_enhance
 from .lic import calc_2D_streamline
 from .lic import LIC_twostage
-from .lic import hsv_mix
+from .lic import mix
 from .lic import pcolormesh_rgb
+from .lic import check_openmp
 
 __version__ = _md.version('astroholic')
 
@@ -15,6 +16,7 @@ __all__ = [
     'contrast_enhance',
     'calc_2D_streamline',
     'LIC_twostage',
-    'hsv_mix',
+    'mix',
     'pcolormesh_rgb',
+    'check_openmp'
 ]

@@ -8,7 +8,16 @@ LIC = _fortran.flic
 gen_noise_fast = _fortran.gen_noise_fast
 
 __all__ = ['LIC', 'gen_noise_fast', 'contrast_enhance', 'calc_2D_streamline',
-           'LIC_twostage', 'hsv_mix', 'pcolormesh_rgb']
+           'LIC_twostage', 'mix', 'pcolormesh_rgb', 'check_openmp']
+
+
+def check_openmp():
+    """Check if OpenMP is enabled in the Fortran code and how many threads are available."""
+    enabled, nthreads = _fortran.check_openmp()
+    if enabled:
+        print(f"OpenMP is enabled with {nthreads} threads.")
+    else:
+        print("OpenMP is not enabled.")
 
 
 def contrast_enhance(data, sig=2.0):
@@ -127,7 +136,7 @@ def LIC_twostage(x, y, vel, generate_plot=False, **kwargs):
     return noise_LlLC
 
 
-def hsv_mix(scalar, noise, cmap='magma', norm=None):
+def mix(scalar, noise, cmap='magma', mode='hsv', norm=None, alpha=None):
     """Mixes a color-mapped scalar and a LIC pattern in HSV color space
 
     Parameters
@@ -152,19 +161,41 @@ def hsv_mix(scalar, noise, cmap='magma', norm=None):
     assert scalar.shape == noise.shape, 'scalar and noise need to have the same shape'
 
     # get the RGB colors for the two images
-    img_col = _plt.colormaps[cmap](norm(scalar))[:, :, :3]
-    img_lic = _plt.colormaps['gray'](_Normalize()(noise))[:, :, :3]
+    img_col = _plt.colormaps[cmap](norm(scalar))[..., :3]
+    img_lic = _plt.colormaps['gray'](_Normalize()(noise))[..., :3]
 
-    # convert to HSV (float64, no quantization)
-    hsv_col = _rgb_to_hsv(img_col)
-    hsv_lic = _rgb_to_hsv(img_lic)
+    if mode == 'hsv':
+        # convert to HSV (float64, no quantization)
+        hsv_col = _rgb_to_hsv(img_col)
+        hsv_lic = _rgb_to_hsv(img_lic)
 
-    # blend value channel
-    hsv = hsv_col.copy()
-    hsv[..., 2] = (hsv_col[..., 2] + hsv_lic[..., 2]) / 2.0
+        # blend value channel
+        hsv = hsv_col.copy()
+        if alpha is None:
+            hsv[..., 2] = (hsv_col[..., 2] + hsv_lic[..., 2]) / 2.0
+        else:
+            V = hsv_lic[..., 2]
+            fac = 1.0 + alpha * (V - 0.5)
+            fac = _np.clip(fac, 0.85, 1.15)   # optional safeguard
+            hsv[..., 2] = _np.clip(hsv_col[..., 2] * fac, 0.0, 1.0)
 
-    # convert back to RGB as uint8
-    return (_hsv_to_rgb(hsv) * 255).astype(_np.uint8)
+        # convert back to RGB as uint8
+        result = (_hsv_to_rgb(hsv) * 255).astype(_np.uint8)
+
+    elif mode == 'rgb':
+
+        if alpha is not None:
+            beta = alpha
+        else:
+            beta = 0.3
+
+        lic = (noise - noise.min()) / (noise.max() - noise.min())
+        lic_tex = 1.0 + beta * (lic - 0.5)
+
+        result = img_col * lic_tex[..., None]
+        result = _np.clip(result, 0, 1)
+
+    return result
 
 
 def pcolormesh_rgb(x, y, rgb, ax=None, **kwargs):

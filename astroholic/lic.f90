@@ -398,4 +398,19 @@ module lic
 
     ! =============================================================================
 
+    ! check whether OpenMP is available and how many threads are configured
+    subroutine check_openmp(openmp_enabled, max_threads)
+        implicit none
+        INTEGER, INTENT(OUT) :: openmp_enabled, max_threads
+!$      INTEGER, EXTERNAL :: omp_get_max_threads
+        openmp_enabled = 0
+        max_threads = 1
+        !$ openmp_enabled = 1
+        !$ max_threads = omp_get_max_threads()
+    end subroutine check_openmp
+
+    ! =============================================================================
+
+    ! =============================================================================
+
 end module lic

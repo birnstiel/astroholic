@@ -8,10 +8,15 @@ py3.install_sources([
 fortran_module_name = '_lic'
 
 # Check for OpenMP (optional dependency), then get OpenMP flags if found
-openmp_dep = dependency('openmp', required : false)
+fc = meson.get_compiler('fortran')
 openmp_flags = []
-if openmp_dep.found()
+openmp_link_flags = []
+if fc.has_argument('-fopenmp')
   openmp_flags = ['-fopenmp']
+  openmp_link_flags = ['-lgomp']
+  message('OpenMP: YES (-fopenmp supported by ' + fc.get_id() + ')')
+else
+  message('OpenMP: NO (-fopenmp not supported)')
 endif
 
 fortran_cwrapper = custom_target(fortran_module_name,
@@ -24,9 +29,10 @@ py3.extension_module(fortran_module_name,
   'lic.f90',
   fortran_cwrapper,
   incdir_f2py / 'fortranobject.c',
-  include_directories: inc_np,
-  dependencies: [py_dep, openmp_dep],
+  c_args: np_inc_flags,
+  dependencies: py_dep,
   install: true,
-  fortran_args: openmp_flags,
+  fortran_args: openmp_flags + np_inc_flags,
+  link_args: openmp_link_flags,
   subdir: py_subdir
 )
