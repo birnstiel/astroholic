@@ -18,16 +18,15 @@ module lic
         
         DOUBLE PRECISION :: ds(2 * n_steps), integral
         DOUBLE PRECISION :: values(2 * n_steps + 1)
-        DOUBLE PRECISION :: path(2 * n_steps + 1, 2)
+        DOUBLE PRECISION :: path(2 * n_steps + 1, 2), total_ds
         INTEGER :: ipath(2 * n_steps + 1, 2)
         INTEGER :: ix, iy, n
 
         !$OMP PARALLEL DO SCHEDULE(STATIC) COLLAPSE(2) &
-        !$OMP& PRIVATE(path, ipath, values, ds, integral, n)
-        do ix = 1, nx
-            do iy = 1, ny
+        !$OMP& PRIVATE(path, ipath, values, ds, total_ds, integral, n)
+        do iy = 1, ny
+            do ix = 1, nx
 
-                
                 call calc_2D_streamline_bothways(x(ix), y(iy), x, y, vel, data, path, ipath, values, length, n_steps, nx, ny)
                 ds = SQRT(SUM( (path(2:2 * n_steps + 1, :) - path(1:2 * n_steps, :))**2, DIM=2))
 
@@ -35,15 +34,21 @@ module lic
                 do n = 1, 2 * n_steps
                     integral = integral + ds(n) * 0.5 * (values(n) + values(n+1))
                 enddo
+                total_ds = sum(ds)
 
-                output(ix, iy) = integral / length
+                if (total_ds > 0d0) then
+                    output(ix, iy) = integral / total_ds
+                else
+                    output(ix, iy) = 0d0
+                end if
+
             end do
         end do
         !$OMP END PARALLEL DO
 
     end subroutine flic
 
-    ! take a 1st order RK step with given velocity field for length ds
+    ! take a 2nd order RK step with given velocity field for length ds
     ! p: the point (x, y) to be updated.
     ! ds: length of the step
     ! x, y: the regular grids in x and y direction
@@ -99,16 +104,17 @@ module lic
         DOUBLE PRECISION, INTENT(OUT) :: values(n_steps + 1)
 
         INTEGER :: i, ix, iy
-        DOUBLE PRECISION :: ds, val(1)
-        DOUBLE PRECISION :: data3(nx, ny, 1)
+        DOUBLE PRECISION :: ds, val
         DOUBLE PRECISION :: p(2)
 
-        data3(:, :, 1) = data
         ds = length / n_steps
 
         ! get initial index
         call hunt(x, nx, x0, ix)
         call hunt(y, ny, y0, iy)
+
+        ix = max(1, min(nx, ix))
+        iy = max(1, min(ny, iy))
 
         ! go forward one length
         p(1) = x0
@@ -123,10 +129,10 @@ module lic
             path(i, :) = p
 
              ! call the interpolation once more to get the ix, iy of the final position and the value at the place
-            call interpolate2d(x, y, data3, p(1), p(2), val, ix, iy, nx, ny, 1)
+            call interpolate2d_scalar(x, y, data, p(1), p(2), val, ix, iy, nx, ny)
             ipath(i, 1) = ix
             ipath(i, 2) = iy
-            values(i) = val(1)
+            values(i) = val
         enddo
         
     end subroutine
@@ -142,16 +148,12 @@ module lic
         !f2py DOUBLE PRECISION OPTIONAL, INTENT(IN) :: length = 1.0
         !f2py INTEGER OPTIONAL, INTENT(IN) :: n_steps = 20
         INTEGER :: i, ix, iy
-        DOUBLE PRECISION :: ds, val(1)
+        DOUBLE PRECISION :: ds, val
         DOUBLE PRECISION :: p(2)
-        DOUBLE PRECISION :: data3(nx, ny, 1)
         DOUBLE PRECISION, INTENT(OUT) :: path(2 * n_steps + 1, 2)
         DOUBLE PRECISION, INTENT(OUT) :: values(2 * n_steps + 1)
         INTEGER, INTENT(OUT) :: ipath(2 * n_steps + 1, 2)
 
-        data3(:, :, 1) = data
-
-        path = 0d0
         ds = length / n_steps / 2
 
         ! get initial index
@@ -175,10 +177,10 @@ module lic
             path(i, :) = p
             
             ! call the interpolation once more to get the ix, iy of the final position and the value at the place
-            call interpolate2d(x, y, data3, p(1), p(2), val, ix, iy, nx, ny, 1)
+            call interpolate2d_scalar(x, y, data, p(1), p(2), val, ix, iy, nx, ny)
             ipath(i, 1) = ix
             ipath(i, 2) = iy
-            values(i) = val(1)
+            values(i) = val
         enddo
 
         ! go BACKWARD half a length
@@ -192,10 +194,10 @@ module lic
             path(i, :) = p
 
             ! call the interpolation once more to get the ix, iy of the final position and the value at the place
-            call interpolate2d(x, y, data3, p(1), p(2), val, ix, iy, nx, ny, 1)
+            call interpolate2d_scalar(x, y, data, p(1), p(2), val, ix, iy, nx, ny)
             ipath(i, 1) = ix
             ipath(i, 2) = iy
-            values(i) = val(1)
+            values(i) = val
         enddo
         
     end subroutine
@@ -215,16 +217,6 @@ module lic
         INTEGER, INTENT(inout) :: ix, iy
         DOUBLE PRECISION :: xd, yd, xnn, ynn
         DOUBLE PRECISION :: z0(nz), z1(nz)
-        
-        ! check for out of range
-        
-        !if ( &
-        !        & (xn .le. x(1)) .or. (xn .ge. x(nx)) .or. &
-        !        & (yn .le. y(1)) .or. (yn .ge. y(ny)) &
-        !        & ) then
-        !    zn = fill_value
-        !    return
-        !endif
         
         ! search for the left indices
         
@@ -248,6 +240,38 @@ module lic
         zn = z0 * (1d0 - yd) + z1 * yd
         
     end subroutine interpolate2d
+
+    ! bilinear interpolation on regular grids, scalar version (2D input)
+    subroutine interpolate2d_scalar(x, y, z, xn, yn, zn, ix, iy, nx, ny)
+        implicit none
+        INTEGER, INTENT(in) :: nx, ny
+        DOUBLE PRECISION, INTENT(in) :: x(1:nx)
+        DOUBLE PRECISION, INTENT(in) :: y(1:ny)
+        DOUBLE PRECISION, INTENT(in) :: z(1:nx, 1:ny)
+        DOUBLE PRECISION, INTENT(in) :: xn, yn
+        DOUBLE PRECISION, INTENT(out) :: zn
+        INTEGER, INTENT(inout) :: ix, iy
+        DOUBLE PRECISION :: xd, yd, xnn, ynn
+        DOUBLE PRECISION :: z0, z1
+
+        call hunt(x, nx, xn, ix)
+        call hunt(y, ny, yn, iy)
+
+        ix = max(1, min(ix, nx - 1))
+        iy = max(1, min(iy, ny - 1))
+
+        xnn = max(x(1), min(x(nx), xn))
+        ynn = max(y(1), min(y(ny), yn))
+
+        xd = (xnn - x(ix)) / (x(ix + 1) - x(ix))
+        yd = (ynn - y(iy)) / (y(iy + 1) - y(iy))
+
+        z0 = z(ix, iy)   * (1d0 - xd) + z(ix+1, iy)   * xd
+        z1 = z(ix, iy+1) * (1d0 - xd) + z(ix+1, iy+1) * xd
+
+        zn = z0 * (1d0 - yd) + z1 * yd
+
+    end subroutine interpolate2d_scalar
 
 ! _____________________________________________________________________________
 ! this routine is for a correlated search within an ordered table:

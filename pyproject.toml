@@ -11,7 +11,7 @@ authors = [
     { name = "Til Birnstiel", email = "til.birnstiel@lmu.de" },
 ]
 license = { file = 'LICENSE' }
-dependencies = ['numpy', 'scipy', 'matplotlib', 'tqdm', 'scikit-image', 'Pillow']
+dependencies = ['numpy', 'scipy', 'matplotlib', 'tqdm', 'scikit-image']
 
 [project.urls]
 Repository = "https://github.com/birnstiel/astroholic"

@@ -1,14 +1,14 @@
 import numpy as _np
 from scipy.ndimage import laplace as _laplace
 import matplotlib.pyplot as _plt
-from matplotlib.colors import Normalize as _Normalize
-from PIL import Image as _Image
+from matplotlib.colors import Normalize as _Normalize, rgb_to_hsv as _rgb_to_hsv, hsv_to_rgb as _hsv_to_rgb
 
 from ._lic import lic as _fortran
 LIC = _fortran.flic
 gen_noise_fast = _fortran.gen_noise_fast
 
-__all__ = ['LIC', 'contrast_enhance']
+__all__ = ['LIC', 'gen_noise_fast', 'contrast_enhance', 'calc_2D_streamline',
+           'LIC_twostage', 'hsv_mix', 'pcolormesh_rgb']
 
 
 def contrast_enhance(data, sig=2.0):
@@ -84,6 +84,8 @@ def LIC_twostage(x, y, vel, generate_plot=False, **kwargs):
     generate_plot : bool, optional
         if true, plot the different stages, by default False
 
+    kwargs : are passed to LIC, e.g. length of the streamline
+
     Returns
     -------
     array
@@ -96,9 +98,9 @@ def LIC_twostage(x, y, vel, generate_plot=False, **kwargs):
     length = abs(length / 2)
 
     noise = gen_noise_fast(nx, ny)
-    noise_L = _Normalize()(LIC(noise, x, y, vel, length=length))
+    noise_L = _Normalize()(LIC(noise, x, y, vel, length=length, **kwargs))
     noise_Ll = _laplace(noise_L)
-    noise_LlL = _Normalize()(LIC(noise_Ll, x, y, vel, length=length))
+    noise_LlL = _Normalize()(LIC(noise_Ll, x, y, vel, length=length, **kwargs))
     noise_LlLC = contrast_enhance(noise_LlL)
 
     if generate_plot:
@@ -150,24 +152,19 @@ def hsv_mix(scalar, noise, cmap='magma', norm=None):
     assert scalar.shape == noise.shape, 'scalar and noise need to have the same shape'
 
     # get the RGB colors for the two images
-    img_col = _plt.get_cmap(cmap)(norm(scalar))
-    img_lic = _plt.get_cmap('gray')(_Normalize()(noise))
+    img_col = _plt.colormaps[cmap](norm(scalar))[:, :, :3]
+    img_lic = _plt.colormaps['gray'](_Normalize()(noise))[:, :, :3]
 
-    # get numpy arrays of HSV values
-    hsv_col = _np.array(_Image.fromarray(
-        _np.uint8(img_col[:, :, :3] * 255)).convert('HSV'))
-    hsv_lic = _np.array(_Image.fromarray(
-        _np.uint8(img_lic[:, :, :3] * 255)).convert('HSV'))
+    # convert to HSV (float64, no quantization)
+    hsv_col = _rgb_to_hsv(img_col)
+    hsv_lic = _rgb_to_hsv(img_lic)
 
-    # put together
+    # blend value channel
     hsv = hsv_col.copy()
-    hsv[..., -1] = _np.uint8((_np.float16(hsv_col[..., 2]) +
-                             _np.float16(hsv_lic[..., 2])) / 2.0)
+    hsv[..., 2] = (hsv_col[..., 2] + hsv_lic[..., 2]) / 2.0
 
-    # convert back to RGB-numpy array
-    rgb2 = _np.array(_Image.fromarray(hsv, mode='HSV').convert('RGB'))
-
-    return rgb2
+    # convert back to RGB as uint8
+    return (_hsv_to_rgb(hsv) * 255).astype(_np.uint8)
 
 
 def pcolormesh_rgb(x, y, rgb, ax=None, **kwargs):
