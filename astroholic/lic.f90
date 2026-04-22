@@ -22,6 +22,8 @@ module lic
         INTEGER :: ipath(2 * n_steps + 1, 2)
         INTEGER :: ix, iy, n
 
+        !$OMP PARALLEL DO SCHEDULE(STATIC) COLLAPSE(2) &
+        !$OMP& PRIVATE(path, ipath, values, ds, integral, n)
         do ix = 1, nx
             do iy = 1, ny
 
@@ -37,6 +39,7 @@ module lic
                 output(ix, iy) = integral / length
             end do
         end do
+        !$OMP END PARALLEL DO
 
     end subroutine flic
 
@@ -320,35 +323,6 @@ module lic
             endif
         enddo
     end subroutine hunt
-    ! =============================================================================
-
-    subroutine gen_noise(nx, ny, noise, n_size)
-        implicit none
-        !f2py INTEGER OPTIONAL, INTENT(IN) :: n_size = 1
-        INTEGER, INTENT(IN) :: nx, ny, n_size
-        DOUBLE PRECISION, INTENT(OUT) :: noise(nx, ny)
-        DOUBLE PRECISION :: u
-        INTEGER :: x(nx, ny), y(nx, ny), ix, iy, i, n_noise
-        noise = 0d0
-        n_noise = int(nx * ny / n_size**2 / 4.0)
-    
-        do ix = 1, nx
-            do iy = 1, ny
-                x(ix, iy) = ix
-                y(ix, iy) = iy
-            end do
-        end do
-
-        do i = 1, n_noise
-            call random_number(u)
-            ix = INT(1.0 + FLOOR(nx * u))
-            call random_number(u)
-            iy = INT(1.0 + FLOOR(ny * u))
-
-            noise = noise + exp(-((x - ix)**2 + (y - iy)**2) / (2.0 * n_size**2))
-        enddo
-
-    end subroutine gen_noise
 
     ! =============================================================================
 

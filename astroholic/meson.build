@@ -25,7 +25,7 @@ py3.extension_module(fortran_module_name,
   fortran_cwrapper,
   incdir_f2py / 'fortranobject.c',
   include_directories: inc_np,
-  dependencies: py_dep,
+  dependencies: [py_dep, openmp_dep],
   install: true,
   fortran_args: openmp_flags,
   subdir: py_subdir
